@@ -1,0 +1,47 @@
+sudo: required
+
+services:
+  - docker
+
+stages:
+  - build
+  - promote
+
+before_install:
+  - curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -
+  - sudo add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable"
+  - sudo apt-get update
+  - sudo apt-get -y install docker-ce
+  - docker login -u="$DOCKER_USERNAME" -p="$DOCKER_PASSWORD";
+  - export TEMP_IMAGE="howtoadhd/travis-dump:howtoadhd-cavalcade-runner-$TRAVIS_COMMIT"
+
+jobs:
+  include:
+
+    - stage: build
+      before_script:
+        - docker pull howtoadhd/php-base:latest-cli
+      script:
+        - docker build --no-cache -t $TEMP_IMAGE .
+      after_success:
+        - docker push $TEMP_IMAGE
+
+    - stage: promote
+      before_script:
+        - docker pull $TEMP_IMAGE
+        - docker tag $TEMP_IMAGE howtoadhd/cavalcade-runner:latest
+      script:
+        - if [ $TRAVIS_PULL_REQUEST == "false" ]; then
+            docker tag $TEMP_IMAGE "howtoadhd/cavalcade-runner:$TRAVIS_BRANCH";
+            docker push howtoadhd/cavalcade-runner:$TRAVIS_BRANCH;
+          fi
+
+        - if [ $TRAVIS_PULL_REQUEST == "false" ] && [ $TRAVIS_BRANCH == "master" ]; then
+            docker tag $TEMP_IMAGE "howtoadhd/cavalcade-runner:latest";
+            docker push howtoadhd/cavalcade-runner:latest;
+          fi
+
+notifications:
+  webhooks:
+    urls:
+      secure: "EDdvOlKrQqqrRXagRqZdybtuASh1Wt2z/9SS6gH21JoRkmaP/peL1AIB3cm32xUD8firxI3w1eTI7rEVUa0OsCIfRiSdG73seKAVzP3bynZmVb28pMbf6Qshqju/dBUnNNmQvgZ6nU+Hyzb5k4/UA6U/Jk/ptNWt+YbUUThEuHh+8okCHms1kjdjaywhyWkTKfYpWAJprPfIH/wEtFLpjm75BbkhHjGVSQrm1NN3ddb2Bqvxuz2xUIj0zYvfQG4LtpUeAsAOO1j5HBrdgKMGuCfFjF6aYcaAj/dWsfenJpTKVjGvhKJXoZ4ipuakG3VRrLGeZR08jYmurfFCTvFvwWX77ObLu+BsHZKlq9hPiSTQ1wUngNaDjl7f+PAwNg+4dxNABdV3df/wfDJSoOTKseofQ9SgysSpiyW5WdLcz3PqyA/oDM8AC+63AjLJlMjfyddkB1y4EiyllIYwLysbc2mjvauvSOpzswuHJ2bVDpCSJuW5hXGIZLBNLg1TIyiqsevlCOcduVaAmvgKxXVoOxddxXycXU0ooObrbp05hpeaU1PWbfGOvVa41SxrwwLpLbUqOyAVQJC+yG5wag/KzjyiKMHR3C5iV5pMxaiy9h0DpCMzcfxW74bDBq4+gaiT2RE8OfC/j6a8YiC7GWAT8q00XydqeU2TYBT4v+Idguk="
